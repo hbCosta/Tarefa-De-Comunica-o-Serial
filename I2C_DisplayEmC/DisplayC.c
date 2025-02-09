@@ -18,6 +18,10 @@
 #include "inc/ssd1306.h"
 #include "hardware/clocks.h"
 #include "inc/font.h"
+#include "hardware/pio.h"
+#include "inc/matriz.c"
+#include "ws2812.pio.h"
+
 #define I2C_PORT i2c1
 #define I2C_SDA 14
 #define I2C_SCL 15
@@ -27,7 +31,6 @@ ssd1306_t ssd; // Inicializa a estrutura do display
 bool cor = true;
 
 
-
 const uint button_A = 5;
 const uint button_B = 6;
 
@@ -35,6 +38,14 @@ const uint led_red_pin = 13;
 const uint led_blue_pin = 12;
 const uint led_green_pin = 11;
 
+// Variável global para armazenar a cor (Entre 0 e 255 para intensidade)
+uint8_t led_r = 0; // Intensidade do vermelho
+uint8_t led_g = 0; // Intensidade do verde
+uint8_t led_b = 20; // Intensidade do azul
+
+#define IS_RGBW false
+#define WS2812_PIN 7
+#define tempoM 4
 
 void inicializar_botoes(){
   gpio_init(button_A);
@@ -59,6 +70,7 @@ static volatile uint32_t last_time = 0; // Armazena o tempo do último evento (e
 static volatile bool mostrar_mensagem_A = false;
 static volatile bool mostrar_mensagem_B = false;
 
+
 void atualizar_display() {
   ssd1306_fill(&ssd, false);  // Limpa o display
 
@@ -70,6 +82,7 @@ void atualizar_display() {
 
   ssd1306_send_data(&ssd);
 }
+
 
 
 // Função de interrupção com debouncing
@@ -88,25 +101,80 @@ void gpio_irq_handler(uint gpio, uint32_t events)
 
           // **Alternar estado da mensagem**
           mostrar_mensagem_A = !mostrar_mensagem_A;
-          mostrar_mensagem_B = false;
+          
           atualizar_display();
         }else if(gpio == button_B){
           gpio_put(led_blue_pin, !gpio_get(led_blue_pin));
           printf("Botão B pressionado - LED azul alterado\n");
           mostrar_mensagem_B = !mostrar_mensagem_B;
-          mostrar_mensagem_A = false;
           atualizar_display();
-
-
         }
 
         a++;                                     // incrementa a variavel de verificação
     }
 }
 
+void get_caracter(){
+  char c;
+  //ssd1306_fill(&ssd, !cor); // Limpa o display
+  if(scanf("%c",&c) ==1){
+    if(c >= 'a' && c <= 'z'){
+      ssd1306_draw_char(&ssd, c, 60, 40);
+    }else if(c >= 'A' && c <= 'z'){
+      ssd1306_draw_char(&ssd, c, 60, 40);
+    }else if(c >= '0' && c <= '9'){
+      ssd1306_draw_char(&ssd, c, 60, 40);
+      set_one_led(led_r, led_g, led_b, c);
+
+    }
+  }
+
+  ssd1306_send_data(&ssd);
+
+}
+
+
+static inline void put_pixel(uint32_t pixel_grb)
+{
+    pio_sm_put_blocking(pio0, 0, pixel_grb << 8u);
+}
+
+static inline uint32_t urgb_u32(uint8_t r, uint8_t g, uint8_t b)
+{
+    return ((uint32_t)(r) << 16) | ((uint32_t)(g) << 8) | (uint32_t)(b);
+}
+
+
+
+void set_one_led(uint8_t r, uint8_t g, uint8_t b, char c)
+{
+    uint32_t color = urgb_u32(r, g, b);
+    int num = c - '0'; // Converte o caractere para número (se for '0', num será 0)
+    // Verifica se o número está dentro do intervalo válido
+    if (num >= 0 && num <= 9) {
+        for (int i = 0; i < NUM_PIXELS; i++) {
+            if (led_buffers[num][i]) { // Substituído led_patterns por led_buffers
+                put_pixel(color); // Acende o LED se estiver no padrão
+            } else {
+                put_pixel(0); // Apaga o LED se não estiver no padrão
+            }
+        }
+    }
+}
+
+
 int main()
 {
   stdio_init_all(); // Inicializa comunicação USB CDC para monitor serial
+
+
+  PIO pio = pio0;
+  int sm = 0;
+  uint offset = pio_add_program(pio, &ws2812_program);
+
+  ws2812_program_init(pio, sm, offset, WS2812_PIN, 800000, IS_RGBW);
+
+
 
   // I2C Initialisation. Using it at 400Khz.
   i2c_init(I2C_PORT, 400 * 1000);
@@ -134,32 +202,14 @@ int main()
   {
     cor = !cor;
     // Atualiza o conteúdo do display com animações
-    //ssd1306_fill(&ssd, !cor); // Limpa o display
-    /*ssd1306_rect(&ssd, 3, 3, 122, 58, cor, !cor); // Desenha um retângulo
-    ssd1306_draw_string(&ssd, "CEPEDI   TIC37", 8, 10); // Desenha uma string
+
+    /*ssd1306_draw_string(&ssd, "CEPEDI   TIC37", 8, 10); // Desenha uma string
     ssd1306_draw_string(&ssd, "EMBARCATECH", 20, 30); // Desenha uma string
     ssd1306_draw_string(&ssd, "PROF WILTON", 15, 48); // Desenha uma string      
     */
     if(stdio_usb_connected()){
-      char c;
-      if(scanf("%c",&c) ==1){
-        if(c >= 'a' && c <= 'z'){
-          ssd1306_draw_char(&ssd, c, 30, 20);
-        }else if(c >= 'A' && c <= 'z'){
-          ssd1306_draw_char(&ssd, c, 30, 20);
-        }else if(0 <= c <= 9){
-          ssd1306_draw_char(&ssd, c, 30, 20);
+      get_caracter();
 
-        }
-      }
     }
-    ssd1306_send_data(&ssd); // Atualiza o display
-
-
-    
-
-
-
-    sleep_ms(1000);
   }
 }
