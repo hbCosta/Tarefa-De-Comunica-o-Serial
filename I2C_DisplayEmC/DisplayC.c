@@ -1,12 +1,12 @@
 /*
- * Por: Wilton Lacerda Silva
+ * Por: Humberto Bandeira Costa
  *    Comunicação serial com I2C
  *  
  * Uso da interface I2C para comunicação com o Display OLED
  * 
- * Estudo da biblioteca ssd1306 com PicoW na Placa BitDogLab.
+ * 
  *  
- * Este programa escreve uma mensagem no display OLED.
+ * Usei o código que foi disponibilizado na aula do professor Wilton como base e construi minha solução
  * 
  * 
 */
@@ -46,6 +46,9 @@ uint8_t led_b = 20; // Intensidade do azul
 #define IS_RGBW false
 #define WS2812_PIN 7
 #define tempoM 4
+
+void set_one_led(uint8_t r, uint8_t g, uint8_t b, char c);
+
 
 void inicializar_botoes(){
   gpio_init(button_A);
@@ -149,11 +152,11 @@ static inline uint32_t urgb_u32(uint8_t r, uint8_t g, uint8_t b)
 void set_one_led(uint8_t r, uint8_t g, uint8_t b, char c)
 {
     uint32_t color = urgb_u32(r, g, b);
-    int num = c - '0'; // Converte o caractere para número (se for '0', num será 0)
+    int num = c - '0'; 
     // Verifica se o número está dentro do intervalo válido
     if (num >= 0 && num <= 9) {
         for (int i = 0; i < NUM_PIXELS; i++) {
-            if (led_buffers[num][i]) { // Substituído led_patterns por led_buffers
+            if (led_buffers[num][i]) { 
                 put_pixel(color); // Acende o LED se estiver no padrão
             } else {
                 put_pixel(0); // Apaga o LED se não estiver no padrão
@@ -201,12 +204,6 @@ int main()
   while (true)
   {
     cor = !cor;
-    // Atualiza o conteúdo do display com animações
-
-    /*ssd1306_draw_string(&ssd, "CEPEDI   TIC37", 8, 10); // Desenha uma string
-    ssd1306_draw_string(&ssd, "EMBARCATECH", 20, 30); // Desenha uma string
-    ssd1306_draw_string(&ssd, "PROF WILTON", 15, 48); // Desenha uma string      
-    */
     if(stdio_usb_connected()){
       get_caracter();
 
