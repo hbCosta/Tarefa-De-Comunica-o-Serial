@@ -23,6 +23,9 @@
 #define I2C_SCL 15
 #define endereco 0x3C
 #define tempo 2500
+ssd1306_t ssd; // Inicializa a estrutura do display
+bool cor = true;
+
 
 
 const uint button_A = 5;
@@ -53,6 +56,20 @@ void inicializar_led(){
 
 static volatile uint32_t a = 1;
 static volatile uint32_t last_time = 0; // Armazena o tempo do último evento (em microssegundos)
+static volatile bool mostrar_mensagem_A = false;
+static volatile bool mostrar_mensagem_B = false;
+
+void atualizar_display() {
+  ssd1306_fill(&ssd, false);  // Limpa o display
+
+  if (mostrar_mensagem_A) {
+      ssd1306_draw_string(&ssd, "LED GREEN ON", 10, 20);
+  } else if (mostrar_mensagem_B) {
+      ssd1306_draw_string(&ssd, "LED BLUE ON", 10, 20);
+  }
+
+  ssd1306_send_data(&ssd);
+}
 
 
 // Função de interrupção com debouncing
@@ -66,11 +83,20 @@ void gpio_irq_handler(uint gpio, uint32_t events)
     {
         last_time = current_time; // Atualiza o tempo do último evento
         if(gpio == button_A){
-          gpio_put(led_green_pin, !gpio_get(led_green_pin)); // Alterna o estado
+          gpio_put(led_green_pin, !gpio_get(led_green_pin));
           printf("Botão A pressionado - LED verde alterado\n");
+
+          // **Alternar estado da mensagem**
+          mostrar_mensagem_A = !mostrar_mensagem_A;
+          mostrar_mensagem_B = false;
+          atualizar_display();
         }else if(gpio == button_B){
           gpio_put(led_blue_pin, !gpio_get(led_blue_pin));
           printf("Botão B pressionado - LED azul alterado\n");
+          mostrar_mensagem_B = !mostrar_mensagem_B;
+          mostrar_mensagem_A = false;
+          atualizar_display();
+
 
         }
 
@@ -89,7 +115,7 @@ int main()
   gpio_set_function(I2C_SCL, GPIO_FUNC_I2C); // Set the GPIO pin function to I2C
   gpio_pull_up(I2C_SDA); // Pull up the data line
   gpio_pull_up(I2C_SCL); // Pull up the clock line
-  ssd1306_t ssd; // Inicializa a estrutura do display
+  //ssd1306_t ssd; // Inicializa a estrutura do display
   ssd1306_init(&ssd, WIDTH, HEIGHT, false, endereco, I2C_PORT); // Inicializa o display
   ssd1306_config(&ssd); // Configura o display
   ssd1306_send_data(&ssd); // Envia os dados para o display
@@ -97,7 +123,6 @@ int main()
   // Limpa o display. O display inicia com todos os pixels apagados.
   ssd1306_fill(&ssd, false);
   ssd1306_send_data(&ssd);
-  bool cor = true;
   inicializar_botoes();
   inicializar_led();
 
@@ -119,7 +144,12 @@ int main()
       char c;
       if(scanf("%c",&c) ==1){
         if(c >= 'a' && c <= 'z'){
-          ssd1306_draw_char(&ssd, c, 15, 48);
+          ssd1306_draw_char(&ssd, c, 30, 20);
+        }else if(c >= 'A' && c <= 'z'){
+          ssd1306_draw_char(&ssd, c, 30, 20);
+        }else if(0 <= c <= 9){
+          ssd1306_draw_char(&ssd, c, 30, 20);
+
         }
       }
     }
